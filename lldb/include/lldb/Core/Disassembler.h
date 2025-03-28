@@ -429,6 +429,10 @@ public:
                                                Target &target,
                                                const AddressRange &disasm_range,
                                                bool force_live_memory = false);
+  static lldb::DisassemblerSP
+  DisassembleRange(const ExecutionContext &exe_ctx, const ArchSpec &arch,
+                   const char *plugin_name, const char *flavor, Target &target,
+                   const AddressRange &range, bool force_live_memory = false);
 
   static lldb::DisassemblerSP
   DisassembleBytes(const ArchSpec &arch, const char *plugin_name,
@@ -459,6 +463,10 @@ public:
   size_t ParseInstructions(Target &target, Address address, Limit limit,
                            Stream *error_strm_ptr,
                            bool force_live_memory = false);
+
+  size_t ParseInstructions(const ExecutionContext &exe_ctx, Target &target,
+                           Address start, Limit limit, Stream *error_strm_ptr,
+                           bool force_live_memory);
 
   virtual size_t DecodeInstructions(const Address &base_addr,
                                     const DataExtractor &data,

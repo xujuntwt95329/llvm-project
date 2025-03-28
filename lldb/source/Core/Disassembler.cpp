@@ -42,6 +42,7 @@
 #include "lldb/lldb-private-interfaces.h"
 #include "lldb/lldb-private-types.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/LEB128.h"
 #include "llvm/TargetParser/Triple.h"
 
 #include <cstdint>
@@ -133,6 +134,31 @@ lldb::DisassemblerSP Disassembler::DisassembleRange(
   const size_t bytes_disassembled = disasm_sp->ParseInstructions(
       target, range.GetBaseAddress(), {Limit::Bytes, range.GetByteSize()},
       nullptr, force_live_memory);
+  if (bytes_disassembled == 0)
+    return {};
+
+  return disasm_sp;
+}
+
+lldb::DisassemblerSP Disassembler::DisassembleRange(
+    const ExecutionContext &exe_ctx, const ArchSpec &arch,
+    const char *plugin_name, const char *flavor, Target &target,
+    const AddressRange &range, bool force_live_memory) {
+  if (range.GetByteSize() <= 0)
+    return {};
+
+  if (!range.GetBaseAddress().IsValid())
+    return {};
+
+  lldb::DisassemblerSP disasm_sp =
+      Disassembler::FindPluginForTarget(target, arch, flavor, plugin_name);
+
+  if (!disasm_sp)
+    return {};
+
+  const size_t bytes_disassembled = disasm_sp->ParseInstructions(
+      exe_ctx, target, range.GetBaseAddress(),
+      {Limit::Bytes, range.GetByteSize()}, nullptr, force_live_memory);
   if (bytes_disassembled == 0)
     return {};
 
@@ -1108,6 +1134,89 @@ size_t Disassembler::ParseInstructions(Target &target, Address start,
     data_sp->SetByteSize(bytes_read);
   DataExtractor data(data_sp, m_arch.GetByteOrder(),
                      m_arch.GetAddressByteSize());
+  return DecodeInstructions(start, data, 0,
+                            limit.kind == Limit::Instructions ? limit.value
+                                                              : UINT32_MAX,
+                            false, data_from_file);
+}
+
+size_t Disassembler::ParseInstructions(const ExecutionContext &exe_ctx,
+                                       Target &target, Address start,
+                                       Limit limit, Stream *error_strm_ptr,
+                                       bool force_live_memory) {
+  m_instruction_list.Clear();
+
+  if (!start.IsValid())
+    return 0;
+
+  start = ResolveAddress(target, start);
+
+  addr_t byte_size = limit.value;
+  if (limit.kind == Limit::Instructions)
+    byte_size *= m_arch.GetMaximumOpcodeByteSize();
+  auto data_sp = std::make_shared<DataBufferHeap>(byte_size, '\0');
+
+  Status error;
+  lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
+  const size_t bytes_read =
+      target.ReadMemory(start, data_sp->GetBytes(), data_sp->GetByteSize(),
+                        error, force_live_memory, &load_addr);
+  const bool data_from_file = load_addr == LLDB_INVALID_ADDRESS;
+
+  if (bytes_read == 0) {
+    if (error_strm_ptr) {
+      if (const char *error_cstr = error.AsCString())
+        error_strm_ptr->Printf("error: %s\n", error_cstr);
+    }
+    return 0;
+  }
+
+  if (bytes_read != data_sp->GetByteSize())
+    data_sp->SetByteSize(bytes_read);
+  DataExtractor data(data_sp, m_arch.GetByteOrder(),
+                     m_arch.GetAddressByteSize());
+
+  ThreadSP thread = exe_ctx.GetThreadSP();
+  StackFrameSP stack_sp = thread->GetStackFrameAtIndex(0);
+
+  SymbolContext sc(
+    stack_sp->GetSymbolContext(eSymbolContextFunction));
+  AddressRange func_range = sc.function->GetAddressRange();
+  const ArchSpec &arch = target.GetArchitecture();
+  const llvm::Triple::ArchType machine = arch.GetMachine();
+
+  LineEntry first_line = sc.GetFunctionStartLineEntry();
+  lldb::addr_t first_line_base = first_line.range.GetBaseAddress().GetOffset();
+
+  if (machine == llvm::Triple::wasm32 || machine == llvm::Triple::wasm64) {
+    if (start.GetOffset() == first_line_base) {
+      uint32_t offset = 0;
+      uint32_t local_count;
+      uint32_t local_count_len;
+
+      local_count = llvm::decodeULEB128(
+          data_sp->GetBytes() + offset, &local_count_len,
+          data_sp->GetBytes() + byte_size);
+      /* local set count */
+      offset += local_count_len;
+
+      for (uint32_t i = 0; i < local_count; i++) {
+        llvm::decodeULEB128(
+            data_sp->GetBytes() + offset, &local_count_len,
+            data_sp->GetBytes() + byte_size);
+        /* count */
+        offset += local_count_len;
+        /* type */
+        offset += 1;
+      }
+
+      return DecodeInstructions(start, data, offset,
+        limit.kind == Limit::Instructions ? limit.value
+                                          : UINT32_MAX,
+        false, data_from_file);
+    }
+  }
+
   return DecodeInstructions(start, data, 0,
                             limit.kind == Limit::Instructions ? limit.value
                                                               : UINT32_MAX,

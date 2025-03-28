@@ -1640,7 +1640,8 @@ size_t DisassemblerLLVMC::DecodeInstructions(const Address &base_addr,
   uint32_t data_cursor = data_offset;
   const size_t data_byte_size = data.GetByteSize();
   uint32_t instructions_parsed = 0;
-  Address inst_addr(base_addr);
+  Address inst_addr{base_addr.GetSection(),
+                    base_addr.GetOffset() + data_offset};
 
   while (data_cursor < data_byte_size &&
          instructions_parsed < num_instructions) {

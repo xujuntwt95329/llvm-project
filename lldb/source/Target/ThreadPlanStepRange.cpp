@@ -266,8 +266,8 @@ InstructionList *ThreadPlanStepRange::GetInstructionsForAddress(
         const char *plugin_name = nullptr;
         const char *flavor = nullptr;
         m_instruction_ranges[i] = Disassembler::DisassembleRange(
-            GetTarget().GetArchitecture(), plugin_name, flavor, GetTarget(),
-            m_address_ranges[i]);
+            GetThread(), GetTarget().GetArchitecture(), plugin_name, flavor,
+            GetTarget(), m_address_ranges[i]);
       }
       if (!m_instruction_ranges[i])
         return nullptr;
