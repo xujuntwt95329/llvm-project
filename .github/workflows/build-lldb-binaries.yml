@@ -155,7 +155,7 @@ jobs:
             & dumpbin /dependents $file | Tee-Object -FilePath $reportPath
           }
 
-          if (Select-String -Path artifacts\windows\*.txt -Pattern 'python[0-9]+\.dll|libedit' -Quiet) {
+          if (Select-String -Path artifacts\windows\*.txt -Pattern 'python[0-9]+.*\.dll|libedit' -Quiet) {
             throw "Unexpected Python or libedit runtime dependency detected."
           }
 
