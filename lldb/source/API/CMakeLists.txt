@@ -17,17 +17,16 @@ endif()
 set(sb_languages_file
   ${CMAKE_CURRENT_BINARY_DIR}/../../include/lldb/API/SBLanguages.h)
 set(sb_languages_generator
-  ${LLDB_SOURCE_DIR}/scripts/generate-sbapi-dwarf-enum.py)
+  ${LLDB_SOURCE_DIR}/cmake/modules/GenerateSBLanguages.cmake)
 add_custom_command(
   COMMENT "Generating SBLanguages.h from Dwarf.def"
-  COMMAND "${Python3_EXECUTABLE}"
-      ${sb_languages_generator}
-      ${LLVM_MAIN_INCLUDE_DIR}/llvm/BinaryFormat/Dwarf.def
-      -o ${sb_languages_file}
+  COMMAND "${CMAKE_COMMAND}"
+      -DLLDB_INPUT=${LLVM_MAIN_INCLUDE_DIR}/llvm/BinaryFormat/Dwarf.def
+      -DLLDB_OUTPUT=${sb_languages_file}
+      -P ${sb_languages_generator}
   OUTPUT ${sb_languages_file}
   DEPENDS ${LLVM_MAIN_INCLUDE_DIR}/llvm/BinaryFormat/Dwarf.def
-          ${sb_languages_generator}
-  WORKING_DIRECTORY ${LLVM_LIBRARY_OUTPUT_INTDIR}
+           ${sb_languages_generator}
 )
 add_custom_target(lldb-sbapi-dwarf-enums
   DEPENDS ${sb_languages_file})
@@ -265,6 +264,25 @@ find_program(unifdef_EXECUTABLE unifdef)
 
 add_custom_target(liblldb-header-staging)
 
+set(lldb_defines_file ${lldb_header_staging_dir}/lldb-defines.h)
+set(lldb_defines_generator
+  ${LLDB_SOURCE_DIR}/cmake/modules/GenerateLLDBDefines.cmake)
+add_custom_command(
+  OUTPUT ${lldb_defines_file}
+  COMMAND "${CMAKE_COMMAND}"
+      -DLLDB_INPUT=${LLDB_SOURCE_DIR}/include/lldb/lldb-defines.h
+      -DLLDB_OUTPUT=${lldb_defines_file}
+      -DLLDB_VERSION_MAJOR=${LLDB_VERSION_MAJOR}
+      -DLLDB_VERSION_MINOR=${LLDB_VERSION_MINOR}
+      -DLLDB_VERSION_PATCH=${LLDB_VERSION_PATCH}
+      -P ${lldb_defines_generator}
+  DEPENDS ${LLDB_SOURCE_DIR}/include/lldb/lldb-defines.h
+          ${lldb_defines_generator}
+  COMMENT "LLDB headers: stage LLDB version defines header")
+add_custom_target(liblldb-stage-header-lldb-defines DEPENDS ${lldb_defines_file})
+add_dependencies(liblldb-stage-header-lldb-defines liblldb-header-staging-dir)
+add_dependencies(liblldb-header-staging liblldb-stage-header-lldb-defines)
+
 if (LLDB_BUILD_FRAMEWORK)
   add_custom_target(lldb-framework-fixup-all-headers)
   add_dependencies(lldb-framework-fixup-all-headers liblldb-header-staging)
@@ -311,10 +329,6 @@ foreach(header
     )
   endif()
 endforeach()
-
-add_custom_command(TARGET liblldb-header-staging POST_BUILD
-  COMMAND "${Python3_EXECUTABLE}" ${LLDB_SOURCE_DIR}/scripts/version-header-fix.py -i ${LLDB_SOURCE_DIR}/include/lldb/lldb-defines.h -o ${lldb_header_staging_dir}/lldb-defines.h -m ${LLDB_VERSION_MAJOR} -n ${LLDB_VERSION_MINOR} -p ${LLDB_VERSION_PATCH}
-)
 add_dependencies(liblldb liblldb-header-staging)
 
 if(LLDB_BUILD_FRAMEWORK)

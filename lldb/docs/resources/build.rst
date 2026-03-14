@@ -33,6 +33,10 @@ scripting support.
 * `Python <http://www.python.org/>`_ 3.8 or later.
 * `SWIG <http://swig.org/>`_ 4 or later.
 
+For build-only configurations that set ``LLDB_ENABLE_PYTHON=OFF`` and
+``LLDB_INCLUDE_TESTS=OFF``, LLDB and ``lldb-dap`` do not require Python or
+SWIG.
+
 If you are on FreeBSD or NetBSD, you will need to install ``gmake`` for building
 the test programs. On other platforms ``make`` is used.
 
@@ -132,6 +136,10 @@ environment setup. This means you should open an appropriate `Developer Command
 Prompt for VS <https://docs.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell?view=vs-2019>`_
 corresponding to the version you wish to use or run ``vcvarsall.bat`` or
 ``VsDevCmd.bat``.
+
+If you are building only ``lldb`` and ``lldb-dap`` with
+``LLDB_ENABLE_PYTHON=OFF`` and ``LLDB_INCLUDE_TESTS=OFF``, you can skip the
+Python and SWIG installation steps above.
 
 Test Requirements
 ^^^^^^^^^^^^^^^^^
@@ -237,6 +245,44 @@ build directory for Clang, remember to pass its module path via ``Clang_DIR``
 
 If you do not require or cannot build ``lldb-server`` on your platform, simply
 remove it from the Ninja command.
+
+If you only need ``lldb`` and ``lldb-dap``, you can configure the standalone
+build without Python, libedit, curses, or tests:
+
+::
+
+  $ cmake -B /path/to/lldb-build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVM_DIR=/path/to/llvm-build/lib/cmake/llvm \
+          -DClang_DIR=/path/to/llvm-build/lib/cmake/clang \
+          -DLLDB_ENABLE_PYTHON=OFF \
+          -DLLDB_ENABLE_LIBEDIT=OFF \
+          -DLLDB_ENABLE_CURSES=OFF \
+          -DLLDB_INCLUDE_TESTS=OFF \
+          /path/to/llvm-project/lldb
+  $ ninja -C /path/to/lldb-build lldb lldb-dap
+
+On Ubuntu 18.04, the build-only dependency set can be as small as:
+
+::
+
+  $ sudo apt-get update
+  $ sudo apt-get install build-essential cmake ninja-build
+
+On Windows, the corresponding standalone build from a Visual Studio Developer
+Command Prompt is:
+
+::
+
+  > cmake -S C:\src\llvm-project\lldb -B C:\src\lldb-build -G Ninja ^
+      -DCMAKE_BUILD_TYPE=Release ^
+      -DLLVM_DIR=C:\llvm\lib\cmake\llvm ^
+      -DClang_DIR=C:\llvm\lib\cmake\clang ^
+      -DLLDB_ENABLE_PYTHON=OFF ^
+      -DLLDB_ENABLE_LIBEDIT=OFF ^
+      -DLLDB_ENABLE_CURSES=OFF ^
+      -DLLDB_INCLUDE_TESTS=OFF
+  > cmake --build C:\src\lldb-build --target lldb lldb-dap
 
 .. note::
 
