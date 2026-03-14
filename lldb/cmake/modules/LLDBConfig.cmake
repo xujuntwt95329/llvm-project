@@ -230,15 +230,9 @@ if (LLDB_ENABLE_PYTHON)
   endif()
 
 else()
-  set(lldb_requires_python_interpreter ${LLDB_INCLUDE_TESTS})
-  if(LLDB_BUILD_FRAMEWORK OR
-     (CMAKE_SYSTEM_NAME MATCHES "Windows" AND LLDB_EXPORT_ALL_SYMBOLS))
-    set(lldb_requires_python_interpreter TRUE)
-  endif()
-
-  if(lldb_requires_python_interpreter)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
-  endif()
+  # Even if Python scripting is disabled, we still need a Python interpreter to
+  # build, for example to generate SBLanguages.h.
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
   # Remove lldb-python-scripts from distribution components.
   # LLVM_DISTRIBUTION_COMPONENTS is set in a cache where LLDB_ENABLE_PYTHON does
