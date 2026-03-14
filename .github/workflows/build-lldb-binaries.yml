@@ -1,0 +1,176 @@
+name: Build LLDB Binaries
+
+on:
+  push:
+    branches:
+      - copilot/build-lldb-binary-windows-linux
+    paths:
+      - .github/workflows/build-lldb-binaries.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-lldb-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux:
+    name: Linux x86_64 (Ubuntu 18.04)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout LLVM
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Build in Ubuntu 18.04 container
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            -w /src \
+            ubuntu:18.04 \
+            bash -lc '
+              set -euxo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y \
+                build-essential \
+                ca-certificates \
+                curl \
+                git \
+                libxml2-dev \
+                ninja-build \
+                python3 \
+                xz-utils
+
+              cmake_version=3.31.6
+              curl -L --retry 5 --retry-delay 5 \
+                "https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}-linux-x86_64.tar.gz" \
+                -o /tmp/cmake.tar.gz
+              tar -C /opt -xzf /tmp/cmake.tar.gz
+              export PATH="/opt/cmake-${cmake_version}-linux-x86_64/bin:${PATH}"
+
+              rm -rf build-lldb-linux package-lldb-linux artifacts/linux
+              mkdir -p artifacts/linux
+
+              cmake -S llvm -B build-lldb-linux -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/src/package-lldb-linux \
+                -DLLVM_ENABLE_PROJECTS="clang;lldb" \
+                -DLLVM_INCLUDE_TESTS=OFF \
+                -DLLVM_TARGETS_TO_BUILD="X86" \
+                -DLLDB_ENABLE_PYTHON=OFF \
+                -DLLDB_ENABLE_LIBEDIT=OFF \
+                -DLLDB_ENABLE_CURSES=OFF \
+                -DLLDB_INCLUDE_TESTS=OFF
+
+              cmake --build build-lldb-linux \
+                --target install-clang-resource-headers install-liblldb install-lldb install-lldb-dap \
+                --parallel
+
+              ldd /src/package-lldb-linux/bin/lldb | tee /src/artifacts/linux/lldb-ldd.txt
+              ldd /src/package-lldb-linux/bin/lldb-dap | tee /src/artifacts/linux/lldb-dap-ldd.txt
+
+              if grep -Eiq "python|libedit" /src/artifacts/linux/lldb-ldd.txt /src/artifacts/linux/lldb-dap-ldd.txt; then
+                echo "Unexpected Python or libedit runtime dependency detected." >&2
+                exit 1
+              fi
+
+              tar -C /src/package-lldb-linux -cJf /src/artifacts/linux/lldb-ubuntu18.04-x86_64.tar.xz .
+            '
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: lldb-ubuntu18.04-x86_64
+          path: artifacts/linux/*
+          retention-days: 14
+
+  build-windows:
+    name: Windows x64 (Windows 10 compatible)
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout LLVM
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: amd64
+
+      - name: Configure LLDB
+        shell: pwsh
+        run: |
+          cmake -S llvm -B build-lldb-windows -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_SYSTEM_VERSION=10.0 `
+            -DCMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\package-lldb-windows" `
+            -DLLVM_ENABLE_PROJECTS="clang;lldb" `
+            -DLLVM_INCLUDE_TESTS=OFF `
+            -DLLVM_TARGETS_TO_BUILD="X86" `
+            -DLLDB_ENABLE_PYTHON=OFF `
+            -DLLDB_ENABLE_LIBEDIT=OFF `
+            -DLLDB_ENABLE_CURSES=OFF `
+            -DLLDB_INCLUDE_TESTS=OFF
+
+      - name: Build and install LLDB
+        shell: pwsh
+        run: |
+          cmake --build build-lldb-windows `
+            --target install-clang-resource-headers install-liblldb install-lldb install-lldb-dap `
+            --parallel
+
+      - name: Verify runtime dependencies
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\windows | Out-Null
+          $stageDir = Join-Path $env:GITHUB_WORKSPACE "package-lldb-windows"
+          $liblldb = Get-ChildItem -Path $stageDir -Recurse -Filter "liblldb.dll" | Select-Object -First 1
+          if (-not $liblldb) {
+            throw "liblldb.dll was not found in the install tree."
+          }
+
+          $files = @(
+            (Join-Path $stageDir "bin\lldb.exe"),
+            (Join-Path $stageDir "bin\lldb-dap.exe"),
+            $liblldb.FullName
+          )
+
+          foreach ($file in $files) {
+            if (-not (Test-Path $file)) {
+              throw "Expected file not found: $file"
+            }
+            $reportName = [System.IO.Path]::GetFileNameWithoutExtension($file) + "-dependents.txt"
+            $reportPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\windows\$reportName"
+            & dumpbin /dependents $file | Tee-Object -FilePath $reportPath
+          }
+
+          if (Select-String -Path artifacts\windows\*.txt -Pattern 'python[0-9]+\.dll|libedit' -Quiet) {
+            throw "Unexpected Python or libedit runtime dependency detected."
+          }
+
+      - name: Package Windows artifact
+        shell: pwsh
+        run: |
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\windows\lldb-windows10-x64.zip"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          Compress-Archive -Path package-lldb-windows\* -DestinationPath $zipPath
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: lldb-windows10-x64
+          path: artifacts/windows/*
+          retention-days: 14

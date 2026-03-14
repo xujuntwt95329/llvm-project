@@ -97,8 +97,7 @@ Windows
 
 The steps outlined here describe how to set up your system and install the
 required dependencies for building and testing LLDB on Windows. They only need
-to be performed once. The commands below assume a Windows 10 machine with a
-Visual Studio developer environment.
+to be performed once.
 
 Build Requirements
 ^^^^^^^^^^^^^^^^^^
@@ -196,46 +195,6 @@ lldb driver:
 ::
 
   $ ninja lldb
-
-If you want ``lldb`` and ``lldb-dap`` binaries without runtime Python or
-libedit dependencies, disable those LLDB features when configuring the build.
-Python and other tools may still be used during the build; these flags only
-control what the resulting binaries depend on at runtime.
-
-On Ubuntu 18.04:
-
-::
-
-  $ sudo apt-get update
-  $ sudo apt-get install build-essential cmake ninja-build python3
-  $ cmake -G Ninja \
-      -DLLVM_ENABLE_PROJECTS="clang;lldb" \
-      -DLLVM_INCLUDE_TESTS=OFF \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DLLDB_ENABLE_PYTHON=OFF \
-      -DLLDB_ENABLE_LIBEDIT=OFF \
-      -DLLDB_ENABLE_CURSES=OFF \
-      -DLLDB_INCLUDE_TESTS=OFF \
-      /path/to/llvm-project/llvm
-  $ ninja lldb lldb-dap
-
-On Windows 10 from a Visual Studio Developer Command Prompt:
-
-::
-
-  > cmake -S C:\src\llvm-project\llvm -B C:\src\llvm-build -G Ninja ^
-      -DLLVM_ENABLE_PROJECTS="clang;lldb" ^
-      -DLLVM_INCLUDE_TESTS=OFF ^
-      -DCMAKE_BUILD_TYPE=Release ^
-      -DLLDB_ENABLE_PYTHON=OFF ^
-      -DLLDB_ENABLE_LIBEDIT=OFF ^
-      -DLLDB_ENABLE_CURSES=OFF ^
-      -DLLDB_INCLUDE_TESTS=OFF
-  > cmake --build C:\src\llvm-build --target lldb lldb-dap
-
-In both cases, ``LLDB_ENABLE_PYTHON=OFF`` disables the Python scripting
-feature, and ``LLDB_ENABLE_LIBEDIT=OFF`` avoids introducing the editline
-dependency into the final binaries.
 
 Standalone builds
 *****************
