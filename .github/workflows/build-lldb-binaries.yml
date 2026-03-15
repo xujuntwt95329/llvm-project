@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - copilot/build-lldb-binary-windows-linux
-    paths:
-      - .github/workflows/build-lldb-binaries.yml
   workflow_dispatch:
 
 permissions:
