@@ -153,7 +153,7 @@ llvm::Expected<PluginInfo> PluginInfo::Create(const FileSpec &path) {
       plugin_info.plugin_term_callback = CastToFPtr<PluginTermCallback>(
           plugin_info.library.getAddressOfSymbol(term_symbol.c_str()));
     }
-    return plugin_info;
+    return std::move(plugin_info);
   }
 
   // Look for the legacy LLDBPluginInitialize/LLDBPluginTerminate symbols.
@@ -166,7 +166,7 @@ llvm::Expected<PluginInfo> PluginInfo::Create(const FileSpec &path) {
     plugin_info.plugin_init_callback = init_fn;
     plugin_info.plugin_term_callback = CastToFPtr<PluginTermCallback>(
         plugin_info.library.getAddressOfSymbol("LLDBPluginTerminate"));
-    return plugin_info;
+    return std::move(plugin_info);
   }
 
   return llvm::createStringError("no initialize symbol found");
