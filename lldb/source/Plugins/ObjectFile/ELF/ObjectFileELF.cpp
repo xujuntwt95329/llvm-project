@@ -4130,7 +4130,7 @@ std::optional<DataExtractor> ObjectFileELF::GetDynstrData() {
                 section_list->FindSectionByID(header->sh_link).get()) {
           DataExtractor data;
           if (ReadSectionData(dynstr, data))
-            return data;
+            return std::move(data);
         }
       }
     }
@@ -4162,7 +4162,7 @@ std::optional<lldb_private::DataExtractor> ObjectFileELF::GetDynamicData() {
       data = GetSegmentData(H);
       if (data.GetByteSize() > 0) {
         m_dynamic_base_addr = H.p_vaddr;
-        return data;
+        return std::move(data);
       }
     }
   }
@@ -4176,7 +4176,7 @@ std::optional<lldb_private::DataExtractor> ObjectFileELF::GetDynamicData() {
       assert(dynamic->GetObjectFile() == this);
       if (ReadSectionData(dynamic, data)) {
         m_dynamic_base_addr = dynamic->GetFileAddress();
-        return data;
+        return std::move(data);
       }
     }
   }

@@ -101,7 +101,7 @@ DILParser::Parse(llvm::StringRef dil_input_expr, DILLexer lexer,
   if (error)
     return error;
 
-  return node_up;
+  return std::move(node_up);
 }
 
 DILParser::DILParser(llvm::StringRef dil_input_expr, DILLexer lexer,

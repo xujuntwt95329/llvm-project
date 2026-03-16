@@ -164,7 +164,7 @@ llvm::Expected<std::vector<MainLoopBase::ReadHandleUP>> DomainSocket::Accept(
   handles.emplace_back(loop.RegisterReadObject(io_sp, cb, error));
   if (error.Fail())
     return error.ToError();
-  return handles;
+  return std::move(handles);
 }
 
 size_t DomainSocket::GetNameOffset() const { return 0; }

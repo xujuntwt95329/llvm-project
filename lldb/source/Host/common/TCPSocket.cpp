@@ -305,7 +305,7 @@ TCPSocket::Accept(MainLoopBase &loop,
       return error.ToError();
   }
 
-  return handles;
+  return std::move(handles);
 }
 
 int TCPSocket::SetOptionNoDelay() {
