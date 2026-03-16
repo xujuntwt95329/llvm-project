@@ -119,7 +119,7 @@ std::optional<json::Value> CommandTool::GetSchema() const {
       {"command",
        Object{{"type", "string"}, {"description", "An lldb command to run."}}}};
   Object schema{{"type", "object"}, {"properties", std::move(properties)}};
-  return schema;
+  return json::Value(std::move(schema));
 }
 
 Expected<lldb_protocol::mcp::CallToolResult>
